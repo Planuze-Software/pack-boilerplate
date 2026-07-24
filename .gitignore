@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Build artifacts
+dist/
+tmp/
+*.plnzpack
+
+# Signing keys — NEVER commit private keys
+*.pem
+.local-keys/
+
+# Scaffold scratch output (plop snippets to merge by hand)
+.scaffold/
+
+# OS / editor
+.DS_Store
+*.log

@@ -1,0 +1,106 @@
+{
+  "kind": "module-pack",
+  "id": "acme/hello-service",
+  "name": "@acme/pack-hello-service",
+  "version": "0.1.0",
+  "labelKey": "packs.hello_service.name",
+  "descriptionKey": "packs.hello_service.description",
+  "doc": "overview.md",
+  "appliesTo": {
+    "packId": "planuze/nep",
+    "minVersion": "1.0.0",
+    "maxVersion": "1.x"
+  },
+  "author": {
+    "name": "Acme",
+    "email": "packs@acme.example",
+    "url": "https://acme.example"
+  },
+  "stack": {
+    "minAppVersion": "1.0.0",
+    "runtimeVersion": 1,
+    "requires": ["runtime.node"]
+  },
+  "distribution": {
+    "license": "free",
+    "channels": ["stable"],
+    "tier": "free",
+    "category": "utility",
+    "tags": ["example", "boilerplate", "hello-world"],
+    "requiresParentEntitlement": true,
+    "visibility": "public"
+  },
+  "planuzeApi": {
+    "schemaVersion": 1
+  },
+  "runtimeDeps": {
+    "common": {
+      "zod": "^3.23.8",
+      "neverthrow": "^7.2.0"
+    },
+    "byModule": {}
+  },
+  "declarations": {
+    "columnTypes": [],
+    "relationTypes": [],
+    "routeTypes": [],
+    "validatorMethods": []
+  },
+  "modules": [
+    {
+      "id": "greeter",
+      "labelKey": "packs.hello_service.modules.greeter.name",
+      "descriptionKey": "packs.hello_service.modules.greeter.description",
+      "doc": "greeter.md",
+      "default": true,
+      "props": [
+        {
+          "key": "greeting-text",
+          "labelKey": "packs.hello_service.modules.greeter.greeting_text",
+          "descriptionKey": "packs.hello_service.modules.greeter.greeting_text_desc",
+          "kind": "text",
+          "required": false,
+          "defaultValue": "Hello"
+        }
+      ],
+      "envVars": [
+        {
+          "key": "HELLO_{MODULE}_SIGNATURE",
+          "default": "",
+          "description": "Optional signature appended to every greeting (e.g. a team name)."
+        }
+      ],
+      "declarations": {
+        "columnTypes": [],
+        "relationTypes": [],
+        "routeTypes": [],
+        "validatorMethods": []
+      },
+      "steps": [
+        {
+          "id": "scaffold-greeter",
+          "labelKey": "packs.hello_service.modules.greeter.step",
+          "command": "node generator/index.js scaffold greeter",
+          "dependsOn": ["install-deps"]
+        }
+      ]
+    }
+  ],
+  "generator": {
+    "entrypoint": "generator/index.js",
+    "steps": [
+      {
+        "id": "install-deps",
+        "labelKey": "packs.hello_service.steps.install_deps",
+        "command": "node generator/index.js install-deps",
+        "dependsOn": []
+      }
+    ]
+  },
+  "actions": [],
+  "collectionActions": [],
+  "moduleActions": [],
+  "projectActions": [],
+  "publicKeyFingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+  "signatureAlgorithm": "ed25519"
+}

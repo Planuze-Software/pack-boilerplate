@@ -1,0 +1,45 @@
+# {{titleCase id}} — <resumo em uma linha>
+
+<Uma frase sobre o que este módulo faz.> Este módulo do pack **gera código** que
+você chama no ponto onde a funcionalidade é usada.
+
+> [!IMPORTANT]
+> Instalar o pack **cria os arquivos, mas não executa nada por conta própria**.
+> O resultado só aparece quando a função gerada é efetivamente chamada — veja a
+> seção de integração.
+
+## 1. O que faz e capacidades reais
+
+- Descreva cada capability REAL lida do template (não invente).
+- `run()` retorna `Result<T, RunError>` (neverthrow).
+
+## 2. Como funciona (generator → código gerado → runtime)
+
+```mermaid
+flowchart LR
+  M[manifest.json] --> SC[scaffold-{{dashCase id}}]
+  SC --> G[{{dashCase id}}/service.ts]
+  G -. você chama .-> H[seu handler / evento]
+```
+
+## 3. Exemplos de uso
+
+```ts
+import { run } from '@/modules/<mod>/config/{{dashCase id}}/index.js';
+
+const r = run();
+if (r.isErr()) return res.status(400).json({ error: r.error.kind });
+```
+
+## 4. Integração — onde chamar, e o alerta de código morto
+
+> [!WARNING]
+> Nada chama a função gerada automaticamente. Chame-a no call-site desejado,
+> senão o pack fica inerte (código morto).
+
+## 5. Troubleshooting
+
+| Situação | Causa provável | Ação |
+|---|---|---|
+| `run()` "não faz nada" | Ninguém chama | Fie a chamada num call-site. |
+| Erro `missing_setting` | Env não configurada | Setar `EXAMPLE_{MODULE}_SETTING`. |

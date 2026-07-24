@@ -1,0 +1,28 @@
+{
+  "packs": {
+    "hello_service": {
+      "name": "Hello Service",
+      "description": "Pack de exemplo (module-pack) que gera um serviço de saudação para um projeto NEP. Serve de boilerplate para a comunidade construir os próprios packs.",
+      "steps": {
+        "install_deps": "Instalar dependências do Hello Service"
+      },
+      "logs": {
+        "manifest_missing": "manifest.json não encontrado no pack.",
+        "deps_empty": "Nenhuma dependência de runtime declarada.",
+        "deps_updated": "{count} dependência(s) adicionada(s) ao package.json do projeto.",
+        "project_package_missing": "package.json do projeto não encontrado.",
+        "module_path_missing": "Módulo alvo não informado (PLANUZE_MODULE_PATH ausente).",
+        "file_written": "Arquivo gerado: {file}"
+      },
+      "modules": {
+        "greeter": {
+          "name": "Greeter",
+          "description": "Gera um helper greet() que monta uma saudação a partir de um texto configurável.",
+          "greeting_text": "Texto da saudação",
+          "greeting_text_desc": "Texto base usado na saudação (ex.: \"Olá\"). É prefixado ao nome informado em greet({ name }).",
+          "step": "Scaffold do módulo Greeter"
+        }
+      }
+    }
+  }
+}

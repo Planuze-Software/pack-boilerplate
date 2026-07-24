@@ -1,0 +1,32 @@
+{
+  "name": "@acme/pack-boilerplate",
+  "version": "0.1.0",
+  "description": "Boilerplate cloável para construir um pack do Planuze (manifest + generator + agent + docs + base + locales).",
+  "private": false,
+  "type": "module",
+  "license": "MIT",
+  "files": [
+    "manifest.json",
+    "locales",
+    "base",
+    "generator",
+    "agent",
+    "docs",
+    "README.md"
+  ],
+  "scripts": {
+    "lint": "npx --yes @planuze/pack-publisher@latest pack lint .",
+    "check:docs": "node scripts/check-docs.mjs",
+    "test": "node --test test/*.test.mjs",
+    "scaffold": "plop",
+    "run:demo": "npx --yes @planuze/pack-publisher@latest pack run . ./tmp/demo --debug",
+    "keygen": "npx --yes @planuze/pack-publisher@latest pack publisher:keygen --output=.local-keys",
+    "register-key": "npx --yes @planuze/pack-publisher@latest pack publisher:register-key --key=.local-keys/publisher.pem",
+    "build": "npx --yes @planuze/pack-publisher@latest pack build . --key=signing-key.pem",
+    "inspect": "npx --yes @planuze/pack-publisher@latest pack inspect ./*.plnzpack --with-files",
+    "sign:publish": "npx --yes @planuze/pack-publisher@latest pack publish ./*.plnzpack --token=$PLANUZE_PUBLISH_TOKEN"
+  },
+  "devDependencies": {
+    "plop": "^4.0.1"
+  }
+}

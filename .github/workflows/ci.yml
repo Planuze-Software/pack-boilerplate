@@ -1,0 +1,70 @@
+name: CI
+
+# Pipeline do pack (CI/CD-first, ADR-0363): em push/PR roda lint + docs gate +
+# build + smoke; em tag `v*` roda também sign + publish.
+#
+# Secrets (Settings -> Secrets and variables -> Actions -> Secrets):
+#   PLANUZE_PUBLISH_TOKEN  — token de publish (app: Publisher -> Chaves e tokens)
+#   PLANUZE_SIGNING_KEY    — chave Ed25519 de assinatura (PEM) registrada no Planuze
+# A pubkey de escrow é buscada do registry pelo `pack build` (ADR-0445) — o
+# publisher não configura variável de escrow.
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    name: Lint + docs + build + smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      # Lint do manifest/locales/generator/docs (roda o mesmo lintPack do app).
+      - name: Pack lint
+        run: npx --yes @planuze/pack-publisher@latest pack lint .
+
+      # Docs gate dedicado — espelha check-pack-docs (ADR-0723): por-locale + en-US
+      # fallback + piso anti-stub. Redundante com o lint, mas explícito e legível.
+      - name: Docs gate
+        run: node scripts/check-docs.mjs
+
+      # Smoke do generator (node:test) — gera o módulo num dir temporário.
+      - name: Generator smoke test
+        run: npm test
+
+      # Build local sem assinatura (valida que o bundle é montável).
+      # Em tag, o build assinado acontece no job `publish`.
+      - name: Pack build (dry, unsigned)
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        run: npx --yes @planuze/pack-publisher@latest pack lint .
+
+  publish:
+    name: Sign + publish (on tag)
+    needs: verify
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Build (signed) + publish
+        env:
+          PLANUZE_PUBLISH_TOKEN: ${{ secrets.PLANUZE_PUBLISH_TOKEN }}
+        run: |
+          printf '%s' "${{ secrets.PLANUZE_SIGNING_KEY }}" > signing-key.pem
+          npx --yes @planuze/pack-publisher@latest pack build . --key=signing-key.pem
+          npx --yes @planuze/pack-publisher@latest pack publish ./*.plnzpack \
+            --token="$PLANUZE_PUBLISH_TOKEN" --ci-mode
+
+      - name: Cleanup signing key
+        if: always()
+        run: rm -f signing-key.pem

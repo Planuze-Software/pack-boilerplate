@@ -1,0 +1,20 @@
+{{{{raw}}}}
+/* {{module}} — módulo gerado por este pack. Substitua o corpo pela lógica real.
+ *
+ * Env vars esperadas:
+ *   EXAMPLE_{{MODULE}}_SETTING   — exemplo (renomeie/remova).
+ *
+ * Erros esperados retornam Result<T, E> (neverthrow); o caminho feliz não lança.
+ */
+import { err, ok, type Result } from 'neverthrow';
+
+const SETTING = process.env.EXAMPLE_{{MODULE}}_SETTING ?? '';
+
+export type RunError = { kind: 'not_implemented' } | { kind: 'missing_setting' };
+
+export function run(): Result<{ ok: true }, RunError> {
+  if (SETTING.length === 0) return err({ kind: 'missing_setting' });
+  // TODO: implemente a lógica real deste módulo.
+  return ok({ ok: true });
+}
+{{{{/raw}}}}

@@ -1,0 +1,43 @@
+# Snippet para o módulo `{{dashCase id}}`
+
+Cole os blocos abaixo e ajuste os textos. Depois rode `npm run lint` e
+`npm run check:docs`.
+
+## 1. Em `manifest.json` → `modules[]`
+
+```json
+{
+  "id": "{{dashCase id}}",
+  "labelKey": "packs.hello_service.modules.{{snakeCase id}}.name",
+  "descriptionKey": "packs.hello_service.modules.{{snakeCase id}}.description",
+  "doc": "{{dashCase id}}.md",
+  "default": false,
+  "props": [],
+  "envVars": [
+    { "key": "EXAMPLE_{MODULE}_SETTING", "default": "", "description": "..." }
+  ],
+  "declarations": { "columnTypes": [], "relationTypes": [], "routeTypes": [], "validatorMethods": [] },
+  "steps": [
+    {
+      "id": "scaffold-{{dashCase id}}",
+      "labelKey": "packs.hello_service.modules.{{snakeCase id}}.step",
+      "command": "node generator/index.js scaffold {{dashCase id}}",
+      "dependsOn": ["install-deps"]
+    }
+  ]
+}
+```
+
+Também adicione `{{dashCase id}}` ao `ALLOWED_MODULES` em `generator/index.js`.
+
+## 2. Em CADA `locales/*.json` (pt-BR e en-US)
+
+```json
+"{{snakeCase id}}": {
+  "name": "{{titleCase id}}",
+  "description": "...",
+  "step": "Scaffold {{titleCase id}}"
+}
+```
+
+(coloque sob `packs.hello_service.modules`).
