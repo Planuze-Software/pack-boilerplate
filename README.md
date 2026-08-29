@@ -7,7 +7,7 @@ Este repositório **é** um pack funcional de exemplo (`acme/hello-service`, um
 `module-pack` que gera um serviço de saudação para projetos NEP). Cada peça é
 mínima, real e coerente com os gates da plataforma (schema do manifest, gate de
 docs por-locale, gate de locales, contrato NDJSON do generator, assinatura
-Ed25519 no publish).
+Ed25519 no release atestado).
 
 > [!TIP]
 > Leia o `manifest.json` + `MANIFEST.md` lado a lado. O `MANIFEST.md` documenta
@@ -53,7 +53,7 @@ O campo `kind` do manifest decide **onde** o pack instala e **o que** ele declar
 | kind | Instala em | Declara `wizard`/`toolkit`? | `appliesTo`? | Exemplo |
 |---|---|---|---|---|
 | `template` | raiz do projeto | Sim (é o stack base) | **proibido** | `nep` (Node+Express+Prisma) |
-| `extension` | `src/modules/<id>/` (módulo novo) | não | **obrigatório** | `aws-lambdas` |
+| `extension` | `src/modules/<id>/` (módulo novo) | não | **obrigatório** | `observability` |
 | `module-pack` | `src/modules/<alvo>/_pkgs/<id>/` | não | **obrigatório** | `nep-auth`, `nep-sms`, **este** `hello-service` |
 
 - Um **template** é um projeto inteiro: ensina tipos de coluna/rota/validator ao
@@ -74,7 +74,8 @@ explícito.
 pack-boilerplate/
 ├── manifest.json              # contrato: kind, appliesTo, distribution, modules, generator
 ├── MANIFEST.md                # referência campo-a-campo do manifest
-├── package.json               # scripts (lint/test/build/sign/publish) + plop
+├── package.json               # ferramentas locais fixadas + scripts de validação
+├── package-lock.json          # grafo exato usado pela CI de validação
 ├── README.md                  # este guia
 ├── CHANGELOG.md               # histórico (Keep a Changelog)
 ├── LICENSE                    # MIT (placeholder)
@@ -105,12 +106,14 @@ pack-boilerplate/
 │   ├── pt-BR.json              # TODA labelKey do manifest
 │   └── en-US.json
 ├── scripts/
-│   └── check-docs.mjs          # gate de docs standalone (espelha check-pack-docs)
+│   ├── check-bundle.mjs        # build efêmero real, sem usar secrets
+│   ├── check-docs.mjs          # gate de docs standalone (espelha check-pack-docs)
+│   └── check-release-readiness.mjs # bloqueia identidade `acme` fora deste boilerplate
 ├── test/
 │   └── generator-smoke.test.mjs# smoke: roda o generator num dir temporário
 ├── plopfile.js                 # scaffolder de novo módulo
 ├── plop-templates/module/       # templates do scaffolder
-└── .github/workflows/ci.yml    # lint + docs + smoke + (em tag) sign/publish
+└── .github/workflows/ci.yml    # validação sem secrets; não publica
 ```
 
 > **Onde ficam os templates?** Este boilerplate lê os `.tpl` de `base/<módulo>/`.
@@ -165,7 +168,7 @@ PLANUZE_MODEL_PROPS='{"greeter":{"greeting-text":"Olá"}}' \
   node generator/index.js scaffold greeter <<< '{}'
 ```
 
-Ou, com a CLL do Planuze: `npx @planuze/pack-publisher pack run . /tmp/proj --debug`.
+Ou, com a CLI do Planuze: `npx @planuze/pack-publisher pack run . /tmp/proj --debug`.
 
 ### Pipeline interno (steps)
 
@@ -192,7 +195,7 @@ chamado. O agente resolve isso — ele tem **duas responsabilidades, nesta ordem
 
 1. **Configurar** a capability (rodar/entender o scaffold).
 2. **Executar a integração** — detectar se a função gerada é consumida em algum
-   call-site e, se for **código morto**, **fiar a chamada** (via `edit_file`),
+   call-site e, se for **código morto**, **conectar a chamada** (via `edit_file`),
    nunca só descrever.
 
 O fluxo que padronizamos (ver `agent/agents.json` + `agent/rules/default.md`):
@@ -283,10 +286,12 @@ npx plop module                  # (opcional) scaffolda um novo módulo
 npm test                         # smoke do generator (gera num dir temporário)
 npm run check:docs               # gate de docs por-locale
 npm run lint                     # lint completo (manifest+locales+generator+docs)
+npm run check:bundle             # monta um .plnzpack efêmero com chaves descartáveis
 npm run run:demo                 # (opcional) roda o generator sobre ./tmp/demo
+npm run check:release-ready      # precisa passar depois de trocar os placeholders
 
-# 5. PUBLIQUE (ver seção 9)
-git tag v0.1.0 && git push origin v0.1.0   # dispara o workflow de publish
+# 5. PREPARE O RELEASE (ver seção 9)
+# copie o caller exibido no Portal do Publisher somente quando ele trouxer o SHA H1
 ```
 
 Regra de ouro ao renomear: **as `labelKey` do manifest e as chaves dos
@@ -296,38 +301,97 @@ Regra de ouro ao renomear: **as `labelKey` do manifest e as chaves dos
 
 ## 9. Publicação (CI/CD-first)
 
-A publicação é **CI/CD-first** (ADR-0363): você não roda `publish` da sua máquina
-com segredos em texto — o pipeline faz. O fluxo:
+A publicação LIVE é **CI/CD-first e atestada**: o workflow central imutável da
+Planuze coleta um único snapshot, escaneia exatamente esses bytes, assina, cifra e
+atesta o checksum com GitHub OIDC. Não rode `pack publish` da sua máquina e não
+copie a chave privada para o checkout.
 
-1. **Gere um keypair Ed25519** (uma vez) e **registre a pubkey** no Planuze:
-   ```bash
-   npx @planuze/pack-publisher pack publisher:keygen --output=.local-keys
-   npx @planuze/pack-publisher pack publisher:register-key --key=.local-keys/publisher.pem
-   ```
-   A privada **nunca** entra no git (`.gitignore` cobre `*.pem`). Guarde-a como
-   secret de CI.
+### O que este repositório faz hoje
 
-2. **Crie os secrets do repositório** (Settings → Secrets and variables → Actions):
-   - `PLANUZE_SIGNING_KEY` — a chave Ed25519 (PEM) registrada.
-   - `PLANUZE_PUBLISH_TOKEN` — token de publish (app: Publisher → Chaves e tokens).
+`.github/workflows/ci.yml` executa somente validação em push/PR: instalação pelo
+`package-lock.json`, lint, docs, smoke test e um bundle real com chaves efêmeras. O
+job tem apenas `contents: read`, não recebe secrets e não publica por tag. A CLI
+pública usada para authoring está fixada
+em `@planuze/pack-publisher@0.3.3`; nunca use `@latest` em automação. O wrapper
+local fornece os endpoints canônicos da API e do registry quando a versão pública
+da CLI ainda não os conhece, sem exigir configuração do desenvolvedor.
 
-3. **Dispare por tag.** `.github/workflows/ci.yml` roda `verify` em todo push/PR
-   (lint + docs + smoke) e, em tag `v*`, o job `publish`:
+O caller LIVE **não está incluído com um SHA fictício**. Copie-o do Portal do
+Publisher quando o portal exibir o SHA de ativação H1 de 40 caracteres. Enquanto o
+placeholder `<40_CHAR_COMMIT_SHA>` aparecer, o fluxo ainda não está ativo.
+
+### GitHub Actions (publicação LIVE)
+
+1. Gere uma chave Ed25519 (`npm run keygen`) e registre a pública
+   (`npm run register-key`) pelo Portal/CLI. A privada é criada como
+   `.local-keys/publisher.key` e nunca entra no Git; `.gitignore` cobre os
+   formatos de chave usados pela CLI.
+2. Em **Settings → Secrets and variables → Actions → Secrets**, crie somente:
+   - `PLANUZE_SIGNING_KEY` — PEM privada correspondente à chave registrada;
+   - `PLANUZE_PUBLISH_TOKEN` — token dedicado ao repositório, escopo `publish`.
+3. Copie do Portal o `.github/workflows/publish.yml` fixado por SHA. O formato será:
+
    ```yaml
-   printf '%s' "${{ secrets.PLANUZE_SIGNING_KEY }}" > signing-key.pem
-   npx @planuze/pack-publisher pack build . --key=signing-key.pem
-   npx @planuze/pack-publisher pack publish ./*.plnzpack --token="$PLANUZE_PUBLISH_TOKEN" --ci-mode
+   name: Release pack
+
+   on:
+     push:
+       tags: ['v*']
+
+   jobs:
+     release:
+       permissions:
+         contents: read
+         id-token: write
+       uses: Planuze-Software/cms/.github/workflows/pack-release.yml@<40_CHAR_COMMIT_SHA>
+       with:
+         pack_dir: .
+       secrets:
+         PLANUZE_PUBLISH_TOKEN: ${{ secrets.PLANUZE_PUBLISH_TOKEN }}
+         PLANUZE_SIGNING_KEY: ${{ secrets.PLANUZE_SIGNING_KEY }}
    ```
 
-O que o `pack build` faz: roda `lintPack()` primeiro, assina `manifest.json` +
-`pack.lock` com Ed25519, cifra os blobs com XChaCha20-Poly1305, busca a pubkey de
-escrow do registry (você não configura escrow) e grava o `.plnzpack`. O
-`publicKeyFingerprint` zero do boilerplate é sobrescrito com a fingerprint real da
-sua chave.
+4. Troque o placeholder pelo SHA mostrado no Portal, rode
+   `npm run check:release-ready`, atualize o SemVer do manifest e envie a tag
+   `v<manifest.version>`.
+
+`PLANUZE_REGISTRY_URL` não precisa ser criada: o fallback de produção é
+`https://registry.planuze.com/v1`. `SCAN_RUNNER_URL` também não pertence ao
+repositório do pack; o scan LIVE usa o runner GitHub do próprio workflow e OIDC.
 
 > [!CAUTION]
-> Nunca commite `*.pem` nem cole o token em código. O workflow escreve a chave em
-> arquivo efêmero e a apaga em `always()`.
+> Nunca use `@main`, tags móveis ou um SHA inventado no caller. Nunca configure
+> root key, escrow key, segredo interno, token Cloudflare ou `SCAN_RUNNER_URL` no
+> repositório do pack.
+
+### GitLab e Bitbucket
+
+Esses providers podem validar o source, mas não publicam LIVE diretamente porque
+não fornecem a identidade OIDC esperada pelo registry. Use Node 24, instale uma
+versão exata da CLI com scripts desabilitados e rode o lint:
+
+```yaml
+# GitLab CI — validação somente
+validate_pack:
+  image: node:24
+  script:
+    - npm ci --ignore-scripts
+    - npm run verify
+```
+
+```yaml
+# bitbucket-pipelines.yml — validação somente
+pipelines:
+  default:
+    - step:
+        image: node:24
+        script:
+          - npm ci --ignore-scripts
+          - npm run verify
+```
+
+Para publicar, espelhe a tag em um repositório GitHub autorizado e mantenha os dois
+secrets exclusivamente nesse caller GitHub.
 
 ---
 
@@ -351,7 +415,7 @@ sua chave.
 
 ## 11. Referência de comandos da CLI
 
-`@planuze/pack-publisher` expõe o binário `planuze`:
+`@planuze/pack-publisher` expõe o binário `planuze`. Os comandos de authoring são:
 
 ```bash
 planuze pack init <pack-id> [--kind template|extension] [--extends <parent>] [--modules a,b]
@@ -365,5 +429,8 @@ planuze pack publisher:register-key [--key=<pem>]
 ```
 
 Os scripts em `package.json` embrulham os mais usados: `npm run lint`,
-`npm test`, `npm run check:docs`, `npm run run:demo`, `npm run keygen`,
-`npm run build`, `npm run inspect`, `npm run sign:publish`, `npm run scaffold`.
+`npm test`, `npm run check:docs`, `npm run check:bundle`, `npm run run:demo`, `npm run keygen`,
+`npm run build:local`, `npm run inspect`, `npm run scaffold` e
+`npm run check:release-ready`. `build:local` serve apenas para inspecionar um
+artefato durante desenvolvimento; a publicação LIVE é responsabilidade exclusiva
+do workflow central atestado.

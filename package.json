@@ -2,9 +2,12 @@
   "name": "@acme/pack-boilerplate",
   "version": "0.1.0",
   "description": "Boilerplate cloável para construir um pack do Planuze (manifest + generator + agent + docs + base + locales).",
-  "private": false,
+  "private": true,
   "type": "module",
   "license": "MIT",
+  "engines": {
+    "node": ">=24 <25"
+  },
   "files": [
     "manifest.json",
     "locales",
@@ -15,18 +18,21 @@
     "README.md"
   ],
   "scripts": {
-    "lint": "npx --yes @planuze/pack-publisher@latest pack lint .",
+    "lint": "node scripts/run-planuze.mjs pack lint .",
+    "check:bundle": "node scripts/check-bundle.mjs",
     "check:docs": "node scripts/check-docs.mjs",
+    "check:release-ready": "node scripts/check-release-readiness.mjs",
     "test": "node --test test/*.test.mjs",
+    "verify": "npm run check:docs && npm test && npm run lint && npm run check:bundle",
     "scaffold": "plop",
-    "run:demo": "npx --yes @planuze/pack-publisher@latest pack run . ./tmp/demo --debug",
-    "keygen": "npx --yes @planuze/pack-publisher@latest pack publisher:keygen --output=.local-keys",
-    "register-key": "npx --yes @planuze/pack-publisher@latest pack publisher:register-key --key=.local-keys/publisher.pem",
-    "build": "npx --yes @planuze/pack-publisher@latest pack build . --key=signing-key.pem",
-    "inspect": "npx --yes @planuze/pack-publisher@latest pack inspect ./*.plnzpack --with-files",
-    "sign:publish": "npx --yes @planuze/pack-publisher@latest pack publish ./*.plnzpack --token=$PLANUZE_PUBLISH_TOKEN"
+    "run:demo": "node scripts/run-planuze.mjs pack run . ./tmp/demo --debug",
+    "keygen": "node scripts/run-planuze.mjs pack publisher:keygen --output=.local-keys",
+    "register-key": "node scripts/run-planuze.mjs pack publisher:register-key --key=.local-keys/publisher.key",
+    "build:local": "node scripts/run-planuze.mjs pack build . --key=signing-key.pem",
+    "inspect": "node scripts/run-planuze.mjs pack inspect ./*.plnzpack --with-files"
   },
   "devDependencies": {
-    "plop": "^4.0.1"
+    "@planuze/pack-publisher": "0.3.3",
+    "plop": "4.0.1"
   }
 }

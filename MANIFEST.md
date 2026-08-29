@@ -37,7 +37,7 @@ generator engine e o marketplace leem tudo daqui. O schema canônico é
 | kind | Instala em | Quando usar |
 |---|---|---|
 | `template` | raiz do projeto (scaffold do zero) | Um stack completo (ex.: `nep` = Node+Express+Prisma). Declara `wizard`, `toolkit`, `declarations`. |
-| `extension` | `src/modules/<id>/` (um módulo top-level novo) | Capability transversal em pasta própria (ex.: `aws-lambdas`). |
+| `extension` | `src/modules/<id>/` (um módulo top-level novo) | Capability transversal em pasta própria (ex.: `observability`). |
 | `module-pack` | `src/modules/<alvo>/_pkgs/<id>/` (dentro de um módulo existente) | Capability consumida por um módulo específico (ex.: `nep-auth`, `nep-sms`, e este `hello-service`). O usuário escolhe o módulo alvo na instalação. |
 
 `extension` e `module-pack` **não** declaram `wizard` (rodam pós-scaffold) e **exigem** `appliesTo`.
@@ -48,11 +48,16 @@ generator engine e o marketplace leem tudo daqui. O schema canônico é
 
 ```json
 "author":  { "name": "Acme", "email": "packs@acme.example", "url": "https://acme.example" }
-"stack":   { "minAppVersion": "1.0.0", "runtimeVersion": 1, "requires": ["runtime.node"] }
+"stack":   { "minAppVersion": "0.0.13", "runtimeVersion": 1, "requires": ["runtime.node", "fs.write"] }
 ```
 
+- `stack.minAppVersion` — menor versão do app capaz de instalar o pack. O
+  boilerplate acompanha o runtime vigente (`0.0.13`); aumente somente quando usar
+  um contrato lançado depois dele.
 - `stack.runtimeVersion` — **sempre `1`** (versão do runtime de packs).
-- `stack.requires` — capabilities dotted-id necessárias (`runtime.node`, `database.postgresql`).
+- `stack.requires` — capabilities dotted-id necessárias. Declare o que o source
+  realmente usa: este generator executa Node e grava arquivos, então exige
+  `runtime.node` e `fs.write`. O scanner compara o código a esta lista.
 
 ### `distribution` (o que controla monetização/visibilidade)
 
@@ -144,6 +149,8 @@ código, não ensina tipos novos ao editor.
 "agent": { "entrypoint": "agent/description/index.md", "workflowIds": [] }
 ```
 
+- Declarar `agent` inclui o entrypoint e o diretório `agent/` no `.plnzpack`.
+  Manter arquivos em `agent/` sem este campo não habilita o agente.
 - `actions` / `collectionActions` / `moduleActions` / `projectActions` — botões que
   o app expõe (rodam step do pack ou comando shell). Mantenha `[]` se não usar.
 

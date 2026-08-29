@@ -16,7 +16,7 @@ import { z } from 'zod';
 import { err, ok, type Result } from 'neverthrow';
 
 const GREETING = '{{greeting_text}}';
-const SIGNATURE = process.env.HELLO_{{MODULE}}_SIGNATURE ?? '';
+const SIGNATURE = process.env['HELLO_{{MODULE}}_SIGNATURE'] ?? '';
 
 export const greetInputSchema = z.object({
   name: z.string().min(1).max(120),

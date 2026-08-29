@@ -8,6 +8,8 @@ tmp/
 
 # Signing keys — NEVER commit private keys
 *.pem
+*.key
+*.key.pub
 .local-keys/
 
 # Scaffold scratch output (plop snippets to merge by hand)

@@ -17,9 +17,9 @@
     "url": "https://acme.example"
   },
   "stack": {
-    "minAppVersion": "1.0.0",
+    "minAppVersion": "0.0.13",
     "runtimeVersion": 1,
-    "requires": ["runtime.node"]
+    "requires": ["runtime.node", "fs.write"]
   },
   "distribution": {
     "license": "free",
@@ -96,6 +96,10 @@
         "dependsOn": []
       }
     ]
+  },
+  "agent": {
+    "entrypoint": "agent/description/index.md",
+    "workflowIds": []
   },
   "actions": [],
   "collectionActions": [],
