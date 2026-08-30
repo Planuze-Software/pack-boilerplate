@@ -22,8 +22,14 @@ SHA-pinned reusable workflow shown by the Planuze Publisher Portal.
 - Ignore the `.key` filenames emitted by the current key generator and point the
   registration helper at the generated private key.
 - Provide canonical API and registry fallbacks around the currently published CLI.
-- Document the attested OIDC release, GitHub secrets, registry fallback, and
-  validation-only GitLab/Bitbucket paths.
+- Document the direct GitHub attestation and provider-neutral central scan used by
+  GitLab and Bitbucket releases.
+- Update the authoring CLI to `0.4.0` and replace the obsolete H1 placeholder with
+  the activated immutable release workflow SHA.
+- Keep `0.4.0` as the local authoring dependency until `0.4.1` is published and the
+  central runtime reports ready; only then expose the LIVE GitLab/Bitbucket snippets.
+- Store the Bitbucket signing key as protected Base64, decode it into a temporary
+  file, and validate the PEM before invoking the release command.
 
 ### Added
 

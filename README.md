@@ -291,7 +291,7 @@ npm run run:demo                 # (opcional) roda o generator sobre ./tmp/demo
 npm run check:release-ready      # precisa passar depois de trocar os placeholders
 
 # 5. PREPARE O RELEASE (ver seção 9)
-# copie o caller exibido no Portal do Publisher somente quando ele trouxer o SHA H1
+# copie o caller exibido no Portal do Publisher, sempre fixado no SHA H1
 ```
 
 Regra de ouro ao renomear: **as `labelKey` do manifest e as chaves dos
@@ -301,10 +301,11 @@ Regra de ouro ao renomear: **as `labelKey` do manifest e as chaves dos
 
 ## 9. Publicação (CI/CD-first)
 
-A publicação LIVE é **CI/CD-first e atestada**: o workflow central imutável da
-Planuze coleta um único snapshot, escaneia exatamente esses bytes, assina, cifra e
-atesta o checksum com GitHub OIDC. Não rode `pack publish` da sua máquina e não
-copie a chave privada para o checkout.
+A publicação LIVE é **CI/CD-first e atestada**. No GitHub, o workflow reutilizável
+coleta um único snapshot, escaneia, assina, cifra e atesta o checksum com OIDC. No
+GitLab e Bitbucket, a CLI constrói o artifact e o scan central Planuze verifica os
+bytes cifrados recebidos antes do finalize. Não rode `pack publish` da sua máquina e
+não copie a chave privada para o checkout.
 
 ### O que este repositório faz hoje
 
@@ -312,13 +313,14 @@ copie a chave privada para o checkout.
 `package-lock.json`, lint, docs, smoke test e um bundle real com chaves efêmeras. O
 job tem apenas `contents: read`, não recebe secrets e não publica por tag. A CLI
 pública usada para authoring está fixada
-em `@planuze/pack-publisher@0.3.3`; nunca use `@latest` em automação. O wrapper
+em `@planuze/pack-publisher@0.4.0`; nunca use `@latest` em automação. O wrapper
 local fornece os endpoints canônicos da API e do registry quando a versão pública
 da CLI ainda não os conhece, sem exigir configuração do desenvolvedor.
 
-O caller LIVE **não está incluído com um SHA fictício**. Copie-o do Portal do
-Publisher quando o portal exibir o SHA de ativação H1 de 40 caracteres. Enquanto o
-placeholder `<40_CHAR_COMMIT_SHA>` aparecer, o fluxo ainda não está ativo.
+O caller LIVE **não faz parte do clone automático**, porque este repositório ainda
+usa a identidade de exemplo `acme`. Depois de substituir os placeholders, copie do
+Portal o caller fixado no SHA de ativação H1
+`4f72bac3b62cf120434900e64b3c3eb50e2852db`.
 
 ### GitHub Actions (publicação LIVE)
 
@@ -343,7 +345,7 @@ placeholder `<40_CHAR_COMMIT_SHA>` aparecer, o fluxo ainda não está ativo.
        permissions:
          contents: read
          id-token: write
-       uses: Planuze-Software/cms/.github/workflows/pack-release.yml@<40_CHAR_COMMIT_SHA>
+       uses: Planuze-Software/cms/.github/workflows/pack-release.yml@4f72bac3b62cf120434900e64b3c3eb50e2852db
        with:
          pack_dir: .
        secrets:
@@ -351,7 +353,7 @@ placeholder `<40_CHAR_COMMIT_SHA>` aparecer, o fluxo ainda não está ativo.
          PLANUZE_SIGNING_KEY: ${{ secrets.PLANUZE_SIGNING_KEY }}
    ```
 
-4. Troque o placeholder pelo SHA mostrado no Portal, rode
+4. Confirme que o SHA continua igual ao exibido no Portal, rode
    `npm run check:release-ready`, atualize o SemVer do manifest e envie a tag
    `v<manifest.version>`.
 
@@ -366,32 +368,82 @@ repositório do pack; o scan LIVE usa o runner GitHub do próprio workflow e OID
 
 ### GitLab e Bitbucket
 
-Esses providers podem validar o source, mas não publicam LIVE diretamente porque
-não fornecem a identidade OIDC esperada pelo registry. Use Node 24, instale uma
-versão exata da CLI com scripts desabilitados e rode o lint:
+Os dois providers publicam pelo scan central, sem mirror e sem token GitHub. Os
+snippets LIVE abaixo só devem ser instalados depois que a versão `0.4.1` estiver
+publicada e o Portal indicar `Scan central atestado`; até lá, `0.4.0` continua sendo
+apenas a dependência local de authoring deste boilerplate. No GitLab,
+`PLANUZE_SIGNING_KEY` é uma variable protegida do tipo **File** e
+`PLANUZE_PUBLISH_TOKEN` é mascarada/protegida:
 
 ```yaml
-# GitLab CI — validação somente
-validate_pack:
+# .gitlab-ci.yml
+release_pack:
   image: node:24
+  rules:
+    - if: $CI_COMMIT_TAG
+  before_script:
+    - npm install --global --ignore-scripts @planuze/pack-publisher@0.4.1
   script:
-    - npm ci --ignore-scripts
-    - npm run verify
+    - |
+      set -eu
+      expected_tag="v$(node -p "require('./manifest.json').version")"
+      test "$CI_COMMIT_TAG" = "$expected_tag" || {
+        printf 'Tag %s does not match %s\n' "$CI_COMMIT_TAG" "$expected_tag" >&2
+        exit 1
+      }
+      release_root="$(mktemp -d)"
+      trap 'rm -rf -- "$release_root"' EXIT HUP INT TERM
+      chmod 700 "$release_root"
+      key_path="$release_root/publisher-signing-key.pem"
+      umask 077
+      cp "$PLANUZE_SIGNING_KEY" "$key_path"
+      chmod 600 "$key_path"
+      PLANUZE_PUBLISHER_TOKEN="$PLANUZE_PUBLISH_TOKEN" planuze pack release . \
+        --key="$key_path" --out="$release_root/release.plnzpack" --ci-mode
 ```
+
+No Bitbucket, configure duas credenciais como Repository variables protegidas:
+`PLANUZE_SIGNING_KEY_B64` contém o Base64 de uma PEM privada e
+`PLANUZE_PUBLISH_TOKEN` contém o token. O Bitbucket não preserva com segurança uma
+PEM multiline em uma variável; não cadastre `PLANUZE_SIGNING_KEY` nesse provider.
 
 ```yaml
-# bitbucket-pipelines.yml — validação somente
+# bitbucket-pipelines.yml
 pipelines:
-  default:
-    - step:
-        image: node:24
-        script:
-          - npm ci --ignore-scripts
-          - npm run verify
+  tags:
+    'v*':
+      - step:
+          name: Release pack
+          image: node:24
+          script:
+            - npm install --global --ignore-scripts @planuze/pack-publisher@0.4.1
+            - |
+              set -eu
+              expected_tag="v$(node -p "require('./manifest.json').version")"
+              test "$BITBUCKET_TAG" = "$expected_tag" || {
+                printf 'Tag %s does not match %s\n' "$BITBUCKET_TAG" "$expected_tag" >&2
+                exit 1
+              }
+              release_root="$(mktemp -d)"
+              trap 'rm -rf -- "$release_root"' EXIT HUP INT TERM
+              chmod 700 "$release_root"
+              key_path="$release_root/publisher-signing-key.pem"
+              umask 077
+              test -n "${PLANUZE_SIGNING_KEY_B64:-}" || {
+                printf 'PLANUZE_SIGNING_KEY_B64 is required\n' >&2
+                exit 1
+              }
+              printf '%s' "$PLANUZE_SIGNING_KEY_B64" | base64 --decode > "$key_path"
+              test -s "$key_path"
+              chmod 600 "$key_path"
+              node -e "require('node:crypto').createPrivateKey(require('node:fs').readFileSync(process.argv[1]))" "$key_path"
+              PLANUZE_PUBLISHER_TOKEN="$PLANUZE_PUBLISH_TOKEN" planuze pack release . \
+                --key="$key_path" --out="$release_root/release.plnzpack" --ci-mode
 ```
 
-Para publicar, espelhe a tag em um repositório GitHub autorizado e mantenha os dois
-secrets exclusivamente nesse caller GitHub.
+Não configure `SCAN_RUNNER_URL`, OIDC manual, escrow, `INTERNAL_SHARED_SECRET` ou
+credenciais GitHub. A CLI seleciona o scan central e só conclui quando o registry
+recebe o atestado do checksum.
 
 ---
 
@@ -422,6 +474,7 @@ planuze pack init <pack-id> [--kind template|extension] [--extends <parent>] [--
 planuze pack lint [pack-dir]
 planuze pack run <pack-dir> [project-dir] [--steps=a,b] [--models=a,b] [--debug]
 planuze pack build [pack-dir] --key=<pem> [--escrow-public-key=<base64>]
+planuze pack release [pack-dir] --key=<pem> [--token=<token>] [--endpoint=<url>] [--ci-mode]
 planuze pack inspect <pack.plnzpack> [--json] [--with-files] [--public-key=<pem>]
 planuze pack publish <pack.plnzpack> [--token=<token>] [--endpoint=<url>] [--ci-mode]
 planuze pack publisher:keygen [--output=<dir>]
@@ -433,4 +486,4 @@ Os scripts em `package.json` embrulham os mais usados: `npm run lint`,
 `npm run build:local`, `npm run inspect`, `npm run scaffold` e
 `npm run check:release-ready`. `build:local` serve apenas para inspecionar um
 artefato durante desenvolvimento; a publicação LIVE é responsabilidade exclusiva
-do workflow central atestado.
+do pipeline atestado exibido no Portal.

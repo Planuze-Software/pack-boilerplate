@@ -11,6 +11,8 @@ import {
 } from '../scripts/run-planuze.mjs';
 
 const packDir = dirname(dirname(fileURLToPath(import.meta.url)));
+const activatedReleaseWorkflow =
+  'Planuze-Software/cms/.github/workflows/pack-release.yml@4f72bac3b62cf120434900e64b3c3eb50e2852db';
 
 test('manifest declares runtime capabilities, app floor and bundled agent', async () => {
   const manifest = JSON.parse(await readFile(join(packDir, 'manifest.json'), 'utf8'));
@@ -52,4 +54,23 @@ test('local CLI wrapper provides canonical endpoints without requiring variables
   });
   assert.equal(overridden.PLANUZE_API_URL, 'https://api.dev.example/v1');
   assert.equal(overridden.PLANUZE_REGISTRY_URL, 'https://registry.dev.example/v1');
+});
+
+test('authoring contract pins the published CLI and the activated release workflow', async () => {
+  const packageJson = JSON.parse(await readFile(join(packDir, 'package.json'), 'utf8'));
+  const readme = await readFile(join(packDir, 'README.md'), 'utf8');
+
+  assert.equal(packageJson.devDependencies['@planuze/pack-publisher'], '0.4.0');
+  assert.match(readme, new RegExp(activatedReleaseWorkflow.replaceAll('/', '\\/')));
+  assert.match(readme, /PLANUZE_SIGNING_KEY` é uma variable protegida do tipo \*\*File\*\*/);
+  assert.match(readme, /cp "\$PLANUZE_SIGNING_KEY" "\$key_path"/);
+  assert.match(readme, /PLANUZE_SIGNING_KEY_B64/);
+  assert.match(readme, /base64 --decode > "\$key_path"/);
+  assert.match(readme, /createPrivateKey/);
+  assert.match(readme, /0\.4\.1.*publicada/s);
+  assert.doesNotMatch(readme, /printf '%s' "\$PLANUZE_SIGNING_KEY" > "\$key_path"/);
+  assert.match(readme, /test "\$CI_COMMIT_TAG" = "\$expected_tag"/);
+  assert.match(readme, /test "\$BITBUCKET_TAG" = "\$expected_tag"/);
+  assert.match(readme, /planuze pack release \[pack-dir\]/);
+  assert.doesNotMatch(readme, /<40_CHAR_COMMIT_SHA>|@planuze\/pack-publisher@0\.3\.3/);
 });

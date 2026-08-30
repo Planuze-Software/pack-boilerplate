@@ -32,7 +32,7 @@
     "inspect": "node scripts/run-planuze.mjs pack inspect ./*.plnzpack --with-files"
   },
   "devDependencies": {
-    "@planuze/pack-publisher": "0.3.3",
+    "@planuze/pack-publisher": "0.4.0",
     "plop": "4.0.1"
   }
 }
