@@ -17,7 +17,7 @@ import {
 
 const packDir = dirname(dirname(fileURLToPath(import.meta.url)));
 const publicCentralRuntime =
-  'Planuze-Software/pack-scan-runner/.github/actions/pack-scan-runtime@a3fc7dfc18658e328ecfd600cb40be991151202f';
+  'Planuze-Software/pack-scan-runner/.github/actions/pack-scan-runtime@ca0cfdb50d575788423c24da04b411ab85bc3da8';
 
 test('manifest declares runtime capabilities, app floor and bundled agent', async () => {
   const manifest = JSON.parse(await readFile(join(packDir, 'manifest.json'), 'utf8'));
@@ -88,7 +88,7 @@ test('authoring contract pins the published CLI and provider-neutral central rel
   const gitlabYaml = yamlBlocks.find((yaml) => yaml.includes('release_pack:'));
   const bitbucketYaml = yamlBlocks.find((yaml) => yaml.includes('pipelines:\n  tags:'));
 
-  assert.equal(packageJson.devDependencies['@planuze/pack-publisher'], '0.4.1');
+  assert.equal(packageJson.devDependencies['@planuze/pack-publisher'], '0.4.3');
   assert.ok(githubYaml);
   assert.match(githubYaml, new RegExp(publicCentralRuntime.replaceAll('/', '\\/')));
   assert.doesNotMatch(readme, /Planuze-Software\/cms|pack-release\.yml|SHA H1/);
@@ -125,7 +125,7 @@ test('authoring contract pins the published CLI and provider-neutral central rel
   assert.doesNotMatch(readme, /Repository variables protegidas/);
   assert.match(readme, /base64 --decode > "\$key_path"/);
   assert.match(readme, /createPrivateKey/);
-  assert.match(readme, /@planuze\/pack-publisher@0\.4\.1/);
+  assert.match(readme, /@planuze\/pack-publisher@0\.4\.3/);
   assert.doesNotMatch(readme, /@planuze\/pack-publisher@(?:latest|0\.4\.0)/);
   assert.doesNotMatch(readme, /printf '%s' "\$PLANUZE_SIGNING_KEY" > "\$key_path"/);
   assert.match(readme, /test "\$CI_COMMIT_TAG" = "\$expected_tag"/);

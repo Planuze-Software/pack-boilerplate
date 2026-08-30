@@ -25,7 +25,7 @@ runtime pinned to an immutable commit.
 - Provide canonical API and registry fallbacks around the currently published CLI.
 - Document one provider-neutral central scan contract for GitHub, GitLab and
   Bitbucket releases.
-- Pin the authoring and provider-neutral release CLI to `0.4.1` and the GitHub
+- Pin the authoring and provider-neutral release CLI to `0.4.3` and the GitHub
   inline job to the immutable public runner action.
 - Keep GitLab/Bitbucket snippets fail-closed behind the Portal central-runtime
   readiness signal; no provider falls back to an unattested release.
@@ -46,7 +46,7 @@ runtime pinned to an immutable commit.
   artifact and the registry validates the registered key.
 - Use the generated `.local-keys/publisher.key` consistently for registration and
   local builds, and refuse accidental in-place key rotation.
-- Align the CLI reference and release instructions with `pack-publisher` 0.4.1,
+- Align the CLI reference and release instructions with `pack-publisher` 0.4.3,
   including `module-pack` init and exact version-tag ancestry guards.
 
 ### Added
