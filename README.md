@@ -109,6 +109,8 @@ pack-boilerplate/
 │   ├── check-bundle.mjs        # build efêmero real, sem usar secrets
 │   ├── check-docs.mjs          # gate de docs standalone (espelha check-pack-docs)
 │   ├── check-source-manifest.mjs # exige o placeholder de assinatura no source
+│   ├── keygen.mjs              # gera a identidade local sem sobrescrever uma existente
+│   ├── run-planuze.mjs         # wrapper da CLI com endpoints canônicos
 │   └── check-release-readiness.mjs # bloqueia identidade `acme` fora deste boilerplate
 ├── test/
 │   └── generator-smoke.test.mjs# smoke: roda o generator num dir temporário
@@ -294,7 +296,7 @@ npm run run:demo                 # (opcional) roda o generator sobre ./tmp/demo
 npm run check:release-ready      # precisa passar depois de trocar a identidade de exemplo
 
 # 5. PREPARE O RELEASE (ver seção 9)
-# copie o caller exibido no Portal do Publisher, sempre fixado no SHA H1
+# copie do Portal o job inline que usa o runtime público fixado por SHA
 ```
 
 Regra de ouro ao renomear: **as `labelKey` do manifest e as chaves dos
@@ -310,11 +312,11 @@ Não cole nele a fingerprint real criada pelo `keygen` e não adicione
 
 ## 9. Publicação (CI/CD-first)
 
-A publicação LIVE é **CI/CD-first e atestada**. No GitHub, o workflow reutilizável
-coleta um único snapshot, escaneia, assina, cifra e atesta o checksum com OIDC. No
-GitLab e Bitbucket, a CLI constrói o artifact e o scan central Planuze verifica os
-bytes cifrados recebidos antes do finalize. Não rode `pack publish` da sua máquina e
-não copie a chave privada para o checkout.
+A publicação LIVE é **CI/CD-first e atestada**. GitHub, GitLab e Bitbucket usam o
+mesmo contrato provider-neutral: a CLI constrói, assina, cifra e envia o artefato,
+e o scan central da Planuze verifica exatamente os bytes cifrados recebidos antes
+do finalize. O job do publisher não emite o atestado e não precisa de OIDC. Não
+rode `pack publish` da sua máquina e não copie a chave privada para o checkout.
 
 O manifest-fonte contém somente o placeholder de 64 zeros. Durante a publicação,
 o build atestado deriva a chave pública da signing key mantida fora do checkout e
@@ -333,10 +335,11 @@ em `@planuze/pack-publisher@0.4.1`; nunca use `@latest` em automação. A CLI e 
 wrapper local usam os endpoints canônicos da API e do registry por padrão, sem
 exigir configuração do desenvolvedor.
 
-O caller LIVE **não faz parte do clone automático**, porque este repositório ainda
-usa a identidade de exemplo `acme`. Depois de substituir os placeholders, copie do
-Portal o caller fixado no SHA de ativação H1
-`4f154d2ddd9c5e0b19bc5637a45db001da7a2cc2`.
+O workflow LIVE **não faz parte do clone automático**, porque este repositório
+ainda usa a identidade de exemplo `acme`. Depois de substituir os placeholders,
+copie do Portal o job inline que prepara a CLI por uma action pública, sempre
+fixada no commit imutável
+`a3fc7dfc18658e328ecfd600cb40be991151202f` do runner central.
 
 ### GitHub Actions (publicação LIVE)
 
@@ -344,11 +347,18 @@ Portal o caller fixado no SHA de ativação H1
    (`npm run register-key`) pelo Portal/CLI. A privada é criada como
    `.local-keys/publisher.key` e nunca entra no Git; `.gitignore` cobre os
    formatos de chave usados pela CLI. Não copie a fingerprint exibida para o
-   manifest-fonte: ele permanece com o placeholder de 64 zeros.
+   manifest-fonte: ele permanece com o placeholder de 64 zeros. O helper recusa
+   sobrescrever uma identidade já criada — preserve essa chave enquanto houver
+   releases assinados por ela. Para o registro único via CLI, forneça
+   `PLANUZE_USER_SESSION_TOKEN` somente no terminal local; ele não é secret do
+   repositório. `npm run build:local` usa a mesma chave gerada e `npm run inspect`
+   abre o `.plnzpack` resultante.
 2. Em **Settings → Secrets and variables → Actions → Secrets**, crie somente:
    - `PLANUZE_SIGNING_KEY` — PEM privada correspondente à chave registrada;
    - `PLANUZE_PUBLISH_TOKEN` — token dedicado ao repositório, escopo `publish`.
-3. Copie do Portal o `.github/workflows/publish.yml` fixado por SHA. O formato será:
+3. Copie do Portal o `.github/workflows/publish.yml` fixado por SHA. Ele é um job
+   inline: não chama workflow privado, não solicita `id-token: write` e entrega os
+   dois secrets somente ao passo de release. O formato será:
 
    ```yaml
    name: Release pack
@@ -357,22 +367,142 @@ Portal o caller fixado no SHA de ativação H1
      push:
        tags: ['v*']
 
+   permissions:
+     contents: read
+
    jobs:
      release:
+       runs-on: ubuntu-24.04
+       timeout-minutes: 20
        permissions:
          contents: read
-         id-token: write
-       uses: Planuze-Software/cms/.github/workflows/pack-release.yml@4f154d2ddd9c5e0b19bc5637a45db001da7a2cc2
-       with:
-         pack_dir: .
-       secrets:
-         PLANUZE_PUBLISH_TOKEN: ${{ secrets.PLANUZE_PUBLISH_TOKEN }}
-         PLANUZE_SIGNING_KEY: ${{ secrets.PLANUZE_SIGNING_KEY }}
+       steps:
+         - name: Set up trusted Node runtime
+           uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+           with:
+             node-version: '24.16.0'
+             registry-url: 'https://registry.npmjs.org'
+
+         - name: Prepare immutable provider-neutral Planuze CLI
+           id: cli
+           uses: Planuze-Software/pack-scan-runner/.github/actions/pack-scan-runtime@a3fc7dfc18658e328ecfd600cb40be991151202f
+
+         - name: Checkout pack as data
+           uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+           with:
+             fetch-depth: 0
+             persist-credentials: false
+
+         - name: Validate exact tag and default-branch ancestry
+           shell: bash
+           env:
+             DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+           run: |
+             set -euo pipefail
+             test -n "$DEFAULT_BRANCH"
+             git check-ref-format --branch "$DEFAULT_BRANCH" >/dev/null
+             default_ref="refs/remotes/origin/$DEFAULT_BRANCH"
+             test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+             git rev-parse --verify "$default_ref^{commit}" >/dev/null
+             git merge-base --is-ancestor "$GITHUB_SHA" "$default_ref" || {
+               printf 'Release tag commit must belong to %s\n' "$DEFAULT_BRANCH" >&2
+               exit 1
+             }
+             node <<'NODE'
+             const { readFileSync } = require('node:fs');
+             const manifest = JSON.parse(readFileSync('manifest.json', 'utf8'));
+             const expectedTag = `v${manifest.version}`;
+             const zeroFingerprint = `sha256:${'0'.repeat(64)}`;
+             if (process.env.GITHUB_REF_NAME !== expectedTag) {
+               throw new Error(`Tag ${process.env.GITHUB_REF_NAME} does not match ${expectedTag}`);
+             }
+             if (manifest.publicKeyFingerprint !== zeroFingerprint) {
+               throw new Error('Source manifest must keep the canonical zero fingerprint');
+             }
+             if (Object.hasOwn(manifest, 'publisherFingerprint')) {
+               throw new Error('publisherFingerprint must not exist in the source manifest');
+             }
+             NODE
+
+         - name: Release through central attested scan
+           shell: bash
+           env:
+             PLANUZE_CLI_PATH: ${{ steps.cli.outputs.cli_path }}
+             PLANUZE_PUBLISHER_TOKEN: ${{ secrets.PLANUZE_PUBLISH_TOKEN }}
+             SIGNING_KEY_PEM: ${{ secrets.PLANUZE_SIGNING_KEY }}
+           run: |
+             set +x
+             set -euo pipefail
+             workspace="$(realpath -e -- "$GITHUB_WORKSPACE")"
+             cli_path="$(realpath -e -- "$PLANUZE_CLI_PATH")"
+             case "$cli_path/" in
+               "$RUNNER_TEMP/"*) ;;
+               *)
+                 echo '::error::Trusted CLI resolved outside RUNNER_TEMP.' >&2
+                 exit 1
+                 ;;
+             esac
+
+             release_root="$(mktemp -d "$RUNNER_TEMP/planuze-pack-release.XXXXXX")"
+             chmod 700 "$release_root"
+             release_root="$(realpath -e -- "$release_root")"
+             case "$release_root/" in
+               "$RUNNER_TEMP/"*) ;;
+               *)
+                 echo '::error::Release directory escaped RUNNER_TEMP.' >&2
+                 exit 1
+                 ;;
+             esac
+             cleanup_release() {
+               if [[ "$release_root" == "$RUNNER_TEMP"/* ]]; then
+                 rm -rf -- "$release_root"
+               fi
+             }
+             trap cleanup_release EXIT HUP INT TERM
+
+             key_path="$release_root/publisher-signing-key.pem"
+             umask 077
+             set -o noclobber
+             printf '%s' "$SIGNING_KEY_PEM" > "$key_path"
+             set +o noclobber
+             chmod 600 "$key_path"
+             if [ ! -s "$key_path" ] || [ -L "$key_path" ]; then
+               echo '::error::Signing key must be a new regular file outside the checkout.' >&2
+               exit 1
+             fi
+             unset SIGNING_KEY_PEM
+
+             env \
+               -u ACTIONS_ID_TOKEN_REQUEST_URL \
+               -u ACTIONS_ID_TOKEN_REQUEST_TOKEN \
+               -u NODE_OPTIONS \
+               -u NODE_PATH \
+               "$cli_path" pack release "$workspace" \
+                 --key="$key_path" \
+                 --out="$release_root/release.plnzpack" \
+                 --ci-mode
+
+         - name: Cleanup trusted CLI runtime
+           if: always()
+           shell: bash
+           env:
+             CLI_INSTALL_ROOT: ${{ steps.cli.outputs.install_root }}
+           run: |
+             set -euo pipefail
+             if [ -n "$CLI_INSTALL_ROOT" ] && [[ "$CLI_INSTALL_ROOT" == "$RUNNER_TEMP"/* ]]; then
+               rm -rf -- "$CLI_INSTALL_ROOT"
+             fi
    ```
 
-4. Confirme que o SHA continua igual ao exibido no Portal, rode
-   `npm run check:release-ready`, atualize o SemVer do manifest e envie a tag
-   `v<manifest.version>`.
+   O runner referenciado é público; o publisher não precisa pertencer à
+   organização Planuze nem receber acesso a repositórios privados. Se a organização
+   do publisher usa allowlist de Actions, autorize somente a action pública acima
+   no SHA exibido pelo Portal — não habilite acesso ao repositório privado do CMS.
+
+4. Confirme que o SHA público continua igual ao exibido no Portal, rode
+   `npm run check:release-ready`, atualize o SemVer do manifest, faça o commit na
+   branch padrão e só então envie a tag exata `v<manifest.version>` apontando para
+   esse commit. O caller também reprova tags fora da branch padrão.
 
 `PLANUZE_REGISTRY_URL` não precisa ser criada em nenhum provider: a CLI usa o
 fallback de produção `https://registry.planuze.com/v1`. Só defina essa variável
@@ -387,9 +517,9 @@ atestado correspondente ao provider.
 
 ### GitLab e Bitbucket
 
-Os dois providers publicam pelo scan central, sem mirror e sem token GitHub. Os
-snippets LIVE abaixo usam a CLI pública fixada em `0.4.1`, mas só devem ser
-instalados quando o Portal indicar `Scan central atestado`. Se o Portal mostrar
+Assim como o GitHub, os dois providers publicam pelo scan central, sem mirror e
+sem token GitHub. Os snippets LIVE abaixo usam a CLI pública fixada em `0.4.1`,
+mas só devem ser instalados quando o Portal indicar `Scan central atestado`. Se o Portal mostrar
 `Ativação em andamento`, aguarde: não há fallback inseguro. No GitLab,
 `PLANUZE_SIGNING_KEY` é uma variable protegida do tipo **File** e
 `PLANUZE_PUBLISH_TOKEN` é mascarada/protegida. Antes da primeira publicação, abra
@@ -514,10 +644,11 @@ pipelines:
                 --key="$key_path" --out="$release_root/release.plnzpack" --ci-mode
 ```
 
-Não configure `SCAN_RUNNER_URL`, OIDC manual, escrow, `INTERNAL_SHARED_SECRET` ou
-credenciais GitHub. `PLANUZE_REGISTRY_URL` continua opcional com o fallback
-canônico descrito acima. A CLI seleciona o scan central e só conclui quando o
-registry recebe o atestado do checksum.
+Em qualquer provider, configure somente os dois secrets de publicação descritos
+na seção correspondente. Não configure `SCAN_RUNNER_URL`, OIDC manual, escrow,
+`INTERNAL_SHARED_SECRET` ou credenciais GitHub. `PLANUZE_REGISTRY_URL` continua
+opcional com o fallback canônico descrito acima. A CLI seleciona o scan central e
+só conclui quando o registry recebe o atestado do checksum.
 
 ---
 
@@ -544,15 +675,18 @@ registry recebe o atestado do checksum.
 `@planuze/pack-publisher` expõe o binário `planuze`. Os comandos de authoring são:
 
 ```bash
-planuze pack init <pack-id> [--kind template|extension] [--extends <parent>] [--modules a,b]
+planuze pack init <pack-id> [--yes] [--force]
+                              [--kind template|extension|module-pack]
+                              [--extends <parent>] [--extends-min-version 1.0.0]
+                              [--modules a,b]
 planuze pack lint [pack-dir]
 planuze pack run <pack-dir> [project-dir] [--steps=a,b] [--models=a,b] [--debug]
-planuze pack build [pack-dir] --key=<pem> [--escrow-public-key=<base64>]
+planuze pack build [pack-dir] --key=<pem> [--escrow-public-key=<base64>] [--out=<file>]
 planuze pack release [pack-dir] --key=<pem> [--token=<token>] [--endpoint=<url>] [--ci-mode]
 planuze pack inspect <pack.plnzpack> [--json] [--with-files] [--public-key=<pem>]
 planuze pack publish <pack.plnzpack> [--token=<token>] [--endpoint=<url>] [--ci-mode]
-planuze pack publisher:keygen [--output=<dir>]
-planuze pack publisher:register-key [--key=<pem>]
+planuze pack publisher:keygen [--output=<dir>] [--ci-mode]
+planuze pack publisher:register-key [--key=<pem>] [--endpoint=<url>] [--ci-mode]
 ```
 
 Os scripts em `package.json` embrulham os mais usados: `npm run lint`,

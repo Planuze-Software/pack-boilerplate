@@ -6,7 +6,8 @@ All notable changes to this pack are documented here. This project adheres to
 
 The `version` in `manifest.json` is the source of truth for the pack version. A
 git tag `v<version>` triggers publication only after the repository installs the
-SHA-pinned reusable workflow shown by the Planuze Publisher Portal.
+provider-neutral inline job shown by the Planuze Publisher Portal, with its public
+runtime pinned to an immutable commit.
 
 ## [Unreleased]
 
@@ -22,10 +23,10 @@ SHA-pinned reusable workflow shown by the Planuze Publisher Portal.
 - Ignore the `.key` filenames emitted by the current key generator and point the
   registration helper at the generated private key.
 - Provide canonical API and registry fallbacks around the currently published CLI.
-- Document the direct GitHub attestation and provider-neutral central scan used by
-  GitLab and Bitbucket releases.
-- Pin the authoring and provider-neutral release CLI to `0.4.1` and replace the
-  obsolete H1 placeholder with the activated immutable release workflow SHA.
+- Document one provider-neutral central scan contract for GitHub, GitLab and
+  Bitbucket releases.
+- Pin the authoring and provider-neutral release CLI to `0.4.1` and the GitHub
+  inline job to the immutable public runner action.
 - Keep GitLab/Bitbucket snippets fail-closed behind the Portal central-runtime
   readiness signal; no provider falls back to an unattested release.
 - Store the Bitbucket signing key as Base64 in a secured variable, decode it into
@@ -36,13 +37,17 @@ SHA-pinned reusable workflow shown by the Planuze Publisher Portal.
   both release credentials.
 - Fail closed unless the GitLab or Bitbucket tag commit belongs to the provider's
   validated default branch, including safe completion of shallow clones.
-- Pin the GitHub caller example to the final immutable H1 revision that enforces
-  default-branch ancestry and exact `v<manifest.version>` matching.
+- Keep the GitHub release job independent from private repositories, without OIDC,
+  while enforcing default-branch ancestry and exact `v<manifest.version>` matching.
 - Make the canonical production registry fallback explicit for every provider so
   pack repositories do not need to define `PLANUZE_REGISTRY_URL`.
 - Require the source manifest to keep only the canonical zero fingerprint
   placeholder; the attested build injects the publisher fingerprint into the
   artifact and the registry validates the registered key.
+- Use the generated `.local-keys/publisher.key` consistently for registration and
+  local builds, and refuse accidental in-place key rotation.
+- Align the CLI reference and release instructions with `pack-publisher` 0.4.1,
+  including `module-pack` init and exact version-tag ancestry guards.
 
 ### Added
 

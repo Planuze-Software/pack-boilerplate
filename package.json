@@ -27,9 +27,9 @@
     "verify": "npm run check:source-manifest && npm run check:docs && npm test && npm run lint && npm run check:bundle",
     "scaffold": "plop",
     "run:demo": "node scripts/run-planuze.mjs pack run . ./tmp/demo --debug",
-    "keygen": "node scripts/run-planuze.mjs pack publisher:keygen --output=.local-keys",
+    "keygen": "node scripts/keygen.mjs",
     "register-key": "node scripts/run-planuze.mjs pack publisher:register-key --key=.local-keys/publisher.key",
-    "build:local": "node scripts/run-planuze.mjs pack build . --key=signing-key.pem",
+    "build:local": "node scripts/run-planuze.mjs pack build . --key=.local-keys/publisher.key",
     "inspect": "node scripts/run-planuze.mjs pack inspect ./*.plnzpack --with-files"
   },
   "devDependencies": {
