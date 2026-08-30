@@ -40,6 +40,9 @@ SHA-pinned reusable workflow shown by the Planuze Publisher Portal.
   default-branch ancestry and exact `v<manifest.version>` matching.
 - Make the canonical production registry fallback explicit for every provider so
   pack repositories do not need to define `PLANUZE_REGISTRY_URL`.
+- Require the source manifest to keep only the canonical zero fingerprint
+  placeholder; the attested build injects the publisher fingerprint into the
+  artifact and the registry validates the registered key.
 
 ### Added
 

@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   verify:
-    name: Manifest, docs and generator
+    name: Source placeholder, manifest, docs and generator
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -36,7 +36,7 @@ jobs:
       - name: Install locked validation tools
         run: npm ci --ignore-scripts
 
-      - name: Verify pack
+      - name: Verify source placeholder and pack
         run: npm run verify
 
       - name: Reject example identity outside the canonical boilerplate

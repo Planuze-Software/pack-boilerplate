@@ -34,13 +34,16 @@ test('source templates remain parseable before placeholder rendering', async () 
 
 test('validation workflow never receives publishing credentials', async () => {
   const workflow = await readFile(join(packDir, '.github/workflows/ci.yml'), 'utf8');
+  const packageJson = JSON.parse(await readFile(join(packDir, 'package.json'), 'utf8'));
 
   assert.doesNotMatch(workflow, /PLANUZE_(?:PUBLISH_TOKEN|SIGNING_KEY)/);
   assert.doesNotMatch(workflow, /pack publish|pack release/);
   assert.doesNotMatch(workflow, /uses:\s+actions\/(?:checkout|setup-node)@v\d/);
   assert.match(workflow, /permissions:\n\s+contents: read/);
   assert.match(workflow, /npm ci --ignore-scripts/);
+  assert.match(workflow, /Verify source placeholder and pack/);
   assert.match(workflow, /npm run verify/);
+  assert.match(packageJson.scripts.verify, /npm run check:source-manifest/);
 });
 
 test('local CLI wrapper provides canonical endpoints without requiring variables', () => {

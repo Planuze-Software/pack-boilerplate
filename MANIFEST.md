@@ -160,9 +160,11 @@ código, não ensina tipos novos ao editor.
 
 | Campo | Descrição |
 |---|---|
-| `publicKeyFingerprint` | `sha256:<hex64>`. No boilerplate é zero — `pack build` sobrescreve com a fingerprint real da sua chave. |
+| `publicKeyFingerprint` | No manifest-fonte deve ser **exatamente** `sha256:` + 64 zeros. O build atestado deriva a chave pública e injeta a fingerprint real somente no artefato. |
 | `signatureAlgorithm` | Sempre `ed25519`. |
-| `publisherFingerprint` | **[opcional]** fingerprint do publisher (chain-of-trust per-publisher). |
+| `publisherFingerprint` | Não declare no manifest-fonte. O build atestado injeta a fingerprint real no artefato para a cadeia de confiança do publisher. |
 
-> Rodar só `pack lint` com fingerprint zero emite um **warning** (não bloqueia) —
-> o build logo sobrescreve.
+> O source precisa manter `sha256:0000000000000000000000000000000000000000000000000000000000000000`.
+> Não copie para ele a fingerprint exibida por `keygen` ou pelo Portal. O gate
+> `npm run check:source-manifest` bloqueia qualquer outro valor; o build atestado
+> injeta a fingerprint real e o registry resolve e valida a chave registrada.

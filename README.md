@@ -108,6 +108,7 @@ pack-boilerplate/
 ├── scripts/
 │   ├── check-bundle.mjs        # build efêmero real, sem usar secrets
 │   ├── check-docs.mjs          # gate de docs standalone (espelha check-pack-docs)
+│   ├── check-source-manifest.mjs # exige o placeholder de assinatura no source
 │   └── check-release-readiness.mjs # bloqueia identidade `acme` fora deste boilerplate
 ├── test/
 │   └── generator-smoke.test.mjs# smoke: roda o generator num dir temporário
@@ -272,6 +273,7 @@ npm install                      # instala plop (devDependency)
 
 # 2. RENOMEIE (o que mexer)
 #   - manifest.json: id, name, labelKey/descriptionKey, appliesTo, modules[]
+#   - NÃO altere publicKeyFingerprint nem adicione publisherFingerprint no source
 #   - locales/*.json: renomeie o namespace packs.<seu_pack>.* p/ casar as labelKeys
 #   - docs/<locale>/*: reescreva overview + doc do módulo
 #   - agent/*: ajuste slug/name/systemPrompt
@@ -285,10 +287,11 @@ npx plop module                  # (opcional) scaffolda um novo módulo
 # 4. TESTE
 npm test                         # smoke do generator (gera num dir temporário)
 npm run check:docs               # gate de docs por-locale
+npm run check:source-manifest    # exige sha256: + 64 zeros no manifest-fonte
 npm run lint                     # lint completo (manifest+locales+generator+docs)
 npm run check:bundle             # monta um .plnzpack efêmero com chaves descartáveis
 npm run run:demo                 # (opcional) roda o generator sobre ./tmp/demo
-npm run check:release-ready      # precisa passar depois de trocar os placeholders
+npm run check:release-ready      # precisa passar depois de trocar a identidade de exemplo
 
 # 5. PREPARE O RELEASE (ver seção 9)
 # copie o caller exibido no Portal do Publisher, sempre fixado no SHA H1
@@ -296,6 +299,12 @@ npm run check:release-ready      # precisa passar depois de trocar os placeholde
 
 Regra de ouro ao renomear: **as `labelKey` do manifest e as chaves dos
 `locales/*.json` têm que casar** — rode `npm run lint` para confirmar.
+
+O campo `publicKeyFingerprint` é uma exceção deliberada à renomeação: o
+manifest-fonte deve manter **exatamente**
+`sha256:0000000000000000000000000000000000000000000000000000000000000000`.
+Não cole nele a fingerprint real criada pelo `keygen` e não adicione
+`publisherFingerprint` ao source.
 
 ---
 
@@ -306,6 +315,13 @@ coleta um único snapshot, escaneia, assina, cifra e atesta o checksum com OIDC.
 GitLab e Bitbucket, a CLI constrói o artifact e o scan central Planuze verifica os
 bytes cifrados recebidos antes do finalize. Não rode `pack publish` da sua máquina e
 não copie a chave privada para o checkout.
+
+O manifest-fonte contém somente o placeholder de 64 zeros. Durante a publicação,
+o build atestado deriva a chave pública da signing key mantida fora do checkout e
+injeta `publicKeyFingerprint` e `publisherFingerprint` reais apenas no `.plnzpack`.
+O registry resolve a chave pública registrada por essa fingerprint e valida a
+cadeia, a revogação e a assinatura antes de aceitar o artefato. Por isso uma
+fingerprint real nunca deve ser fixada no repositório do pack.
 
 ### O que este repositório faz hoje
 
@@ -327,7 +343,8 @@ Portal o caller fixado no SHA de ativação H1
 1. Gere uma chave Ed25519 (`npm run keygen`) e registre a pública
    (`npm run register-key`) pelo Portal/CLI. A privada é criada como
    `.local-keys/publisher.key` e nunca entra no Git; `.gitignore` cobre os
-   formatos de chave usados pela CLI.
+   formatos de chave usados pela CLI. Não copie a fingerprint exibida para o
+   manifest-fonte: ele permanece com o placeholder de 64 zeros.
 2. Em **Settings → Secrets and variables → Actions → Secrets**, crie somente:
    - `PLANUZE_SIGNING_KEY` — PEM privada correspondente à chave registrada;
    - `PLANUZE_PUBLISH_TOKEN` — token dedicado ao repositório, escopo `publish`.
@@ -539,7 +556,8 @@ planuze pack publisher:register-key [--key=<pem>]
 ```
 
 Os scripts em `package.json` embrulham os mais usados: `npm run lint`,
-`npm test`, `npm run check:docs`, `npm run check:bundle`, `npm run run:demo`, `npm run keygen`,
+`npm test`, `npm run check:docs`, `npm run check:source-manifest`,
+`npm run check:bundle`, `npm run run:demo`, `npm run keygen`,
 `npm run build:local`, `npm run inspect`, `npm run scaffold` e
 `npm run check:release-ready`. `build:local` serve apenas para inspecionar um
 artefato durante desenvolvimento; a publicação LIVE é responsabilidade exclusiva
