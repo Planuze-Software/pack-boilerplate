@@ -313,14 +313,14 @@ não copie a chave privada para o checkout.
 `package-lock.json`, lint, docs, smoke test e um bundle real com chaves efêmeras. O
 job tem apenas `contents: read`, não recebe secrets e não publica por tag. A CLI
 pública usada para authoring está fixada
-em `@planuze/pack-publisher@0.4.0`; nunca use `@latest` em automação. O wrapper
-local fornece os endpoints canônicos da API e do registry quando a versão pública
-da CLI ainda não os conhece, sem exigir configuração do desenvolvedor.
+em `@planuze/pack-publisher@0.4.1`; nunca use `@latest` em automação. A CLI e o
+wrapper local usam os endpoints canônicos da API e do registry por padrão, sem
+exigir configuração do desenvolvedor.
 
 O caller LIVE **não faz parte do clone automático**, porque este repositório ainda
 usa a identidade de exemplo `acme`. Depois de substituir os placeholders, copie do
 Portal o caller fixado no SHA de ativação H1
-`4f72bac3b62cf120434900e64b3c3eb50e2852db`.
+`4f154d2ddd9c5e0b19bc5637a45db001da7a2cc2`.
 
 ### GitHub Actions (publicação LIVE)
 
@@ -345,7 +345,7 @@ Portal o caller fixado no SHA de ativação H1
        permissions:
          contents: read
          id-token: write
-       uses: Planuze-Software/cms/.github/workflows/pack-release.yml@4f72bac3b62cf120434900e64b3c3eb50e2852db
+       uses: Planuze-Software/cms/.github/workflows/pack-release.yml@4f154d2ddd9c5e0b19bc5637a45db001da7a2cc2
        with:
          pack_dir: .
        secrets:
@@ -357,9 +357,11 @@ Portal o caller fixado no SHA de ativação H1
    `npm run check:release-ready`, atualize o SemVer do manifest e envie a tag
    `v<manifest.version>`.
 
-`PLANUZE_REGISTRY_URL` não precisa ser criada: o fallback de produção é
-`https://registry.planuze.com/v1`. `SCAN_RUNNER_URL` também não pertence ao
-repositório do pack; o scan LIVE usa o runner GitHub do próprio workflow e OIDC.
+`PLANUZE_REGISTRY_URL` não precisa ser criada em nenhum provider: a CLI usa o
+fallback de produção `https://registry.planuze.com/v1`. Só defina essa variável
+quando a Planuze fornecer explicitamente outro registry. `SCAN_RUNNER_URL` também
+não pertence ao repositório do pack; a Planuze seleciona internamente o runner
+atestado correspondente ao provider.
 
 > [!CAUTION]
 > Nunca use `@main`, tags móveis ou um SHA inventado no caller. Nunca configure
@@ -369,11 +371,14 @@ repositório do pack; o scan LIVE usa o runner GitHub do próprio workflow e OID
 ### GitLab e Bitbucket
 
 Os dois providers publicam pelo scan central, sem mirror e sem token GitHub. Os
-snippets LIVE abaixo só devem ser instalados depois que a versão `0.4.1` estiver
-publicada e o Portal indicar `Scan central atestado`; até lá, `0.4.0` continua sendo
-apenas a dependência local de authoring deste boilerplate. No GitLab,
+snippets LIVE abaixo usam a CLI pública fixada em `0.4.1`, mas só devem ser
+instalados quando o Portal indicar `Scan central atestado`. Se o Portal mostrar
+`Ativação em andamento`, aguarde: não há fallback inseguro. No GitLab,
 `PLANUZE_SIGNING_KEY` é uma variable protegida do tipo **File** e
-`PLANUZE_PUBLISH_TOKEN` é mascarada/protegida:
+`PLANUZE_PUBLISH_TOKEN` é mascarada/protegida. Antes da primeira publicação, abra
+**Settings → Repository → Protected tags**, crie o wildcard `v*` e permita a criação
+somente aos papéis que podem publicar. Sem a tag protegida, o GitLab não entrega
+essas variables protegidas ao job:
 
 ```yaml
 # .gitlab-ci.yml
@@ -386,6 +391,27 @@ release_pack:
   script:
     - |
       set -eu
+      test -n "${CI_DEFAULT_BRANCH:-}" || {
+        printf 'CI_DEFAULT_BRANCH is required\n' >&2
+        exit 1
+      }
+      git check-ref-format --branch "$CI_DEFAULT_BRANCH" >/dev/null
+      default_ref="refs/remotes/origin/$CI_DEFAULT_BRANCH"
+      fetch_ref="+refs/heads/$CI_DEFAULT_BRANCH:$default_ref"
+      if test "$(git rev-parse --is-shallow-repository)" = true; then
+        git fetch --no-tags --prune --unshallow origin "$fetch_ref"
+      else
+        git fetch --no-tags --prune origin "$fetch_ref"
+      fi
+      test "$(git rev-parse HEAD)" = "$CI_COMMIT_SHA" || {
+        printf 'Checkout does not match CI_COMMIT_SHA\n' >&2
+        exit 1
+      }
+      git rev-parse --verify "$default_ref^{commit}" >/dev/null
+      git merge-base --is-ancestor "$CI_COMMIT_SHA" "$default_ref" || {
+        printf 'Release tag commit must belong to %s\n' "$CI_DEFAULT_BRANCH" >&2
+        exit 1
+      }
       expected_tag="v$(node -p "require('./manifest.json').version")"
       test "$CI_COMMIT_TAG" = "$expected_tag" || {
         printf 'Tag %s does not match %s\n' "$CI_COMMIT_TAG" "$expected_tag" >&2
@@ -402,7 +428,8 @@ release_pack:
         --key="$key_path" --out="$release_root/release.plnzpack" --ci-mode
 ```
 
-No Bitbucket, configure duas credenciais como Repository variables protegidas:
+No Bitbucket, abra **Repository settings → Pipelines → Repository variables** e
+configure duas **secured variables**, selecionando o cadeado em ambas:
 `PLANUZE_SIGNING_KEY_B64` contém o Base64 de uma PEM privada e
 `PLANUZE_PUBLISH_TOKEN` contém o token. O Bitbucket não preserva com segurança uma
 PEM multiline em uma variável; não cadastre `PLANUZE_SIGNING_KEY` nesse provider.
@@ -419,6 +446,35 @@ pipelines:
             - npm install --global --ignore-scripts @planuze/pack-publisher@0.4.1
             - |
               set -eu
+              default_ref="$(
+                git ls-remote --symref origin HEAD |
+                  awk '$1 == "ref:" && $3 == "HEAD" { print $2 }'
+              )"
+              case "$default_ref" in
+                refs/heads/*) ;;
+                *)
+                  printf 'Remote default branch ref is invalid\n' >&2
+                  exit 1
+                  ;;
+              esac
+              git check-ref-format "$default_ref"
+              default_branch="${default_ref#refs/heads/}"
+              remote_default_ref="refs/remotes/origin/$default_branch"
+              fetch_ref="+$default_ref:$remote_default_ref"
+              if test "$(git rev-parse --is-shallow-repository)" = true; then
+                git fetch --no-tags --prune --unshallow origin "$fetch_ref"
+              else
+                git fetch --no-tags --prune origin "$fetch_ref"
+              fi
+              test "$(git rev-parse HEAD)" = "$BITBUCKET_COMMIT" || {
+                printf 'Checkout does not match BITBUCKET_COMMIT\n' >&2
+                exit 1
+              }
+              git rev-parse --verify "$remote_default_ref^{commit}" >/dev/null
+              git merge-base --is-ancestor "$BITBUCKET_COMMIT" "$remote_default_ref" || {
+                printf 'Release tag commit must belong to %s\n' "$default_branch" >&2
+                exit 1
+              }
               expected_tag="v$(node -p "require('./manifest.json').version")"
               test "$BITBUCKET_TAG" = "$expected_tag" || {
                 printf 'Tag %s does not match %s\n' "$BITBUCKET_TAG" "$expected_tag" >&2
@@ -442,8 +498,9 @@ pipelines:
 ```
 
 Não configure `SCAN_RUNNER_URL`, OIDC manual, escrow, `INTERNAL_SHARED_SECRET` ou
-credenciais GitHub. A CLI seleciona o scan central e só conclui quando o registry
-recebe o atestado do checksum.
+credenciais GitHub. `PLANUZE_REGISTRY_URL` continua opcional com o fallback
+canônico descrito acima. A CLI seleciona o scan central e só conclui quando o
+registry recebe o atestado do checksum.
 
 ---
 

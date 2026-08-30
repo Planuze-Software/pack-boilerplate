@@ -24,12 +24,22 @@ SHA-pinned reusable workflow shown by the Planuze Publisher Portal.
 - Provide canonical API and registry fallbacks around the currently published CLI.
 - Document the direct GitHub attestation and provider-neutral central scan used by
   GitLab and Bitbucket releases.
-- Update the authoring CLI to `0.4.0` and replace the obsolete H1 placeholder with
-  the activated immutable release workflow SHA.
-- Keep `0.4.0` as the local authoring dependency until `0.4.1` is published and the
-  central runtime reports ready; only then expose the LIVE GitLab/Bitbucket snippets.
-- Store the Bitbucket signing key as protected Base64, decode it into a temporary
-  file, and validate the PEM before invoking the release command.
+- Pin the authoring and provider-neutral release CLI to `0.4.1` and replace the
+  obsolete H1 placeholder with the activated immutable release workflow SHA.
+- Keep GitLab/Bitbucket snippets fail-closed behind the Portal central-runtime
+  readiness signal; no provider falls back to an unattested release.
+- Store the Bitbucket signing key as Base64 in a secured variable, decode it into
+  a temporary file, and validate the PEM before invoking the release command.
+- Require the GitLab `v*` protected-tag rule before protected release variables
+  can reach a tag pipeline.
+- Use Bitbucket's current secured-variable terminology and require the padlock for
+  both release credentials.
+- Fail closed unless the GitLab or Bitbucket tag commit belongs to the provider's
+  validated default branch, including safe completion of shallow clones.
+- Pin the GitHub caller example to the final immutable H1 revision that enforces
+  default-branch ancestry and exact `v<manifest.version>` matching.
+- Make the canonical production registry fallback explicit for every provider so
+  pack repositories do not need to define `PLANUZE_REGISTRY_URL`.
 
 ### Added
 
