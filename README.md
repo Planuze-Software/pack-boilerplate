@@ -331,7 +331,7 @@ fingerprint real nunca deve ser fixada no repositório do pack.
 `package-lock.json`, lint, docs, smoke test e um bundle real com chaves efêmeras. O
 job tem apenas `contents: read`, não recebe secrets e não publica por tag. A CLI
 pública usada para authoring está fixada
-em `@planuze/pack-publisher@0.4.3`; nunca use `@latest` em automação. A CLI e o
+em `@planuze/pack-publisher@0.4.7`; nunca use `@latest` em automação. A CLI e o
 wrapper local usam os endpoints canônicos da API e do registry por padrão, sem
 exigir configuração do desenvolvedor.
 
@@ -339,7 +339,7 @@ O workflow LIVE **não faz parte do clone automático**, porque este repositóri
 ainda usa a identidade de exemplo `acme`. Depois de substituir os placeholders,
 copie do Portal o job inline que prepara a CLI por uma action pública, sempre
 fixada no commit imutável
-`ca0cfdb50d575788423c24da04b411ab85bc3da8` do runner central.
+`bf702b28d758bf6eb9d5f29f06c3cacc230828d4` do runner central.
 
 ### GitHub Actions (publicação LIVE)
 
@@ -385,7 +385,7 @@ fixada no commit imutável
 
          - name: Prepare immutable provider-neutral Planuze CLI
            id: cli
-           uses: Planuze-Software/pack-scan-runner/.github/actions/pack-scan-runtime@ca0cfdb50d575788423c24da04b411ab85bc3da8
+           uses: Planuze-Software/pack-scan-runner/.github/actions/pack-scan-runtime@bf702b28d758bf6eb9d5f29f06c3cacc230828d4
 
          - name: Checkout pack as data
            uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -518,7 +518,7 @@ atestado correspondente ao provider.
 ### GitLab e Bitbucket
 
 Assim como o GitHub, os dois providers publicam pelo scan central, sem mirror e
-sem token GitHub. Os snippets LIVE abaixo usam a CLI pública fixada em `0.4.3`,
+sem token GitHub. Os snippets LIVE abaixo usam a CLI pública fixada em `0.4.7`,
 mas só devem ser instalados quando o Portal indicar `Scan central atestado`. Se o Portal mostrar
 `Ativação em andamento`, aguarde: não há fallback inseguro. No GitLab,
 `PLANUZE_SIGNING_KEY` é uma variable protegida do tipo **File** e
@@ -534,7 +534,7 @@ release_pack:
   rules:
     - if: $CI_COMMIT_TAG
   before_script:
-    - npm install --global --ignore-scripts @planuze/pack-publisher@0.4.3
+    - npm install --global --ignore-scripts @planuze/pack-publisher@0.4.7
   script:
     - |
       set -eu
@@ -590,7 +590,7 @@ pipelines:
           name: Release pack
           image: node:24
           script:
-            - npm install --global --ignore-scripts @planuze/pack-publisher@0.4.3
+            - npm install --global --ignore-scripts @planuze/pack-publisher@0.4.7
             - |
               set -eu
               default_ref="$(
