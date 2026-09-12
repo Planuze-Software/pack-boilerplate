@@ -13,6 +13,8 @@ runtime pinned to an immutable commit.
 
 ### Changed
 
+- Update the authoring and provider-neutral release CLI to `0.4.9` and pin the
+  GitHub example to its immutable H2 runtime `7f407b390f84b59cc66105cf5445ff2ae7465cf2`.
 - Align the example manifest with app `0.0.13`, declare `fs.write`, and bundle the
   integration agent explicitly.
 - Keep source templates parseable before placeholder rendering so fail-closed
